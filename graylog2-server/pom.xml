@@ -275,11 +275,6 @@
         </dependency>
 
         <dependency>
-            <groupId>net.java.dev.jna</groupId>
-            <artifactId>jna</artifactId>
-        </dependency>
-
-        <dependency>
             <groupId>org.kie</groupId>
             <artifactId>kie-api</artifactId>
         </dependency>
@@ -869,7 +864,7 @@
                 </property>
             </activation>
             <properties>
-                <it.es.version>5.5.2</it.es.version>
+                <it.es.version>5.6.3</it.es.version>
             </properties>
             <build>
                 <plugins>

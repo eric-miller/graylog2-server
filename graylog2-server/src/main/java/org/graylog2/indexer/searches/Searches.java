@@ -42,11 +42,11 @@ import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.script.Script;
-import org.elasticsearch.script.ScriptService;
+import org.elasticsearch.script.ScriptType;
 import org.elasticsearch.search.aggregations.AbstractAggregationBuilder;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.bucket.filter.FilterAggregationBuilder;
-import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramBuilder;
+import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramAggregationBuilder;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.graylog2.Configuration;
@@ -284,8 +284,7 @@ public class Searches {
         if (stackedFields.isEmpty()) {
             // Wrap terms aggregation in a no-op filter to make sure the result structure is correct when not having
             // stacked fields.
-            return AggregationBuilders.filter(AGG_FILTER)
-                    .filter(QueryBuilders.matchAllQuery())
+            return AggregationBuilders.filter(AGG_FILTER, QueryBuilders.matchAllQuery())
                     .subAggregation(AggregationBuilders.terms(AGG_TERMS)
                             .field(field)
                             .size(size > 0 ? size : 50)
@@ -311,10 +310,9 @@ public class Searches {
             filterQuery.must(QueryBuilders.existsQuery(f));
         });
 
-        return AggregationBuilders.filter(AGG_FILTER)
-                .filter(filterQuery)
+        return AggregationBuilders.filter(AGG_FILTER, filterQuery)
                 .subAggregation(AggregationBuilders.terms(AGG_TERMS)
-                        .script(new Script(scriptStringBuilder.toString(), ScriptService.ScriptType.INLINE, "painless", null))
+                        .script(new Script(ScriptType.INLINE, "painless", scriptStringBuilder.toString(),  Collections.emptyMap()))
                         .size(size > 0 ? size : 50)
                         .order(termsOrder));
     }
@@ -376,9 +374,9 @@ public class Searches {
                                                Sorting.Direction sorting) {
         final Terms.Order termsOrder = sorting == Sorting.Direction.DESC ? Terms.Order.count(false) : Terms.Order.count(true);
 
-        final DateHistogramBuilder histogramBuilder = AggregationBuilders.dateHistogram(AGG_HISTOGRAM)
+        final DateHistogramAggregationBuilder histogramBuilder = AggregationBuilders.dateHistogram(AGG_HISTOGRAM)
                 .field(Message.FIELD_TIMESTAMP)
-                .interval(interval.toESInterval())
+                .dateHistogramInterval(interval.toESInterval())
                 .subAggregation(createTermsBuilder(field, stackedFields, size, termsOrder))
                 .subAggregation(AggregationBuilders.missing("missing").field(field));
 
@@ -465,16 +463,14 @@ public class Searches {
                 termsOrder = Terms.Order.count(true);
         }
 
-        final FilterAggregationBuilder builder = AggregationBuilders.filter(AGG_FILTER)
+        final FilterAggregationBuilder builder = AggregationBuilders.filter(AGG_FILTER, standardAggregationFilters(range, filter))
             .subAggregation(
                 AggregationBuilders.terms(AGG_TERMS_STATS)
                     .field(keyField)
                     .subAggregation(AggregationBuilders.stats(AGG_STATS).field(valueField))
                     .order(termsOrder)
                     .size(size)
-            )
-            .filter(standardAggregationFilters(range, filter));
-
+            );
         searchSourceBuilder.aggregation(builder);
 
         if (affectedIndices.isEmpty()) {
@@ -527,8 +523,7 @@ public class Searches {
             searchSourceBuilder = filteredSearchRequest(query, filter, range);
         }
 
-        final FilterAggregationBuilder filterBuilder = AggregationBuilders.filter(AGG_FILTER)
-                .filter(standardAggregationFilters(range, filter));
+        final FilterAggregationBuilder filterBuilder = AggregationBuilders.filter(AGG_FILTER, standardAggregationFilters(range, filter));
         if (includeCount) {
             searchSourceBuilder.aggregation(AggregationBuilders.count(AGG_VALUE_COUNT).field(field));
         }
@@ -586,9 +581,9 @@ public class Searches {
     }
 
     public HistogramResult histogram(String query, DateHistogramInterval interval, String filter, TimeRange range) {
-        final DateHistogramBuilder histogramBuilder = AggregationBuilders.dateHistogram(AGG_HISTOGRAM)
+        final DateHistogramAggregationBuilder histogramBuilder = AggregationBuilders.dateHistogram(AGG_HISTOGRAM)
                 .field(Message.FIELD_TIMESTAMP)
-                .interval(interval.toESInterval());
+                .dateHistogramInterval(interval.toESInterval());
 
         final SearchSourceBuilder searchSourceBuilder = filteredSearchRequest(query, filter, range)
             .aggregation(histogramBuilder);
@@ -634,9 +629,9 @@ public class Searches {
                                           TimeRange range,
                                           boolean includeStats,
                                           boolean includeCardinality) {
-        final DateHistogramBuilder dateHistogramBuilder = AggregationBuilders.dateHistogram(AGG_HISTOGRAM)
+        final DateHistogramAggregationBuilder dateHistogramBuilder = AggregationBuilders.dateHistogram(AGG_HISTOGRAM)
                 .field(Message.FIELD_TIMESTAMP)
-                .interval(interval.toESInterval());
+                .dateHistogramInterval(interval.toESInterval());
 
         if (includeStats) {
             dateHistogramBuilder.subAggregation(AggregationBuilders.stats(AGG_STATS).field(field));
